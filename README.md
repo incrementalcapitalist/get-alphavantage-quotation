@@ -89,6 +89,8 @@ get-alphavantage-quotation/
 ├── src/
 │   ├── components/
 │   │   └── StockQuote.tsx
+│   ├── src/
+│   │   └── index.css
 │   ├── App.tsx
 │   └── main.tsx
 │

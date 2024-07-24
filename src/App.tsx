@@ -1,5 +1,5 @@
 import React from "react";
-import StockQuote from "./StockQuote";
+import StockQuote from "./components/StockQuote";
 
 const App: React.FC = () => {
   return (
@@ -7,7 +7,7 @@ const App: React.FC = () => {
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
           <h1 className="text-3xl sm:text-4xl font-bold text-center text-gray-900 mb-8">
-            Alpha Vantage Stock Quote App
+            Alpha Vantage Stock Quotation App
           </h1>
           <StockQuote />
         </div>
