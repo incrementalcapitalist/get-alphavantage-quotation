@@ -10,7 +10,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: path.resolve(__dirname, 'public/index.html')
-    }
+    },
+    cssCodeSplit: false
   },
   resolve: {
     alias: {
