@@ -1,5 +1,5 @@
-// Import React and useState hook from the React library
-import React, { useState } from "react";
+// Import necessary hooks from React
+import React, { useState, useCallback } from 'react';
 
 // Define types for API responses and errors
 type APIError = {
@@ -7,10 +7,12 @@ type APIError = {
   code?: string;
 };
 
+// Interface for stock data, allowing any string key with a string value
 interface StockData {
   [key: string]: string;
 }
 
+// Interface defining the structure of an option contract
 interface OptionContract {
   contractName: string;
   contractType: 'CALL' | 'PUT';
@@ -22,24 +24,26 @@ interface OptionContract {
   // Add other relevant fields as needed
 }
 
+// Interface for the entire options chain data
 interface OptionsData {
   calls: OptionContract[];
   puts: OptionContract[];
 }
 
+// Define the StockQuote functional component
 const StockQuote: React.FC = () => {
-  // State for user input
+  // State for the stock symbol input
   const [symbol, setSymbol] = useState<string>("");
-  // State for stock quote data
+  // State for storing fetched stock data
   const [stockData, setStockData] = useState<StockData | null>(null);
-  // State for options chain data
+  // State for storing fetched options data
   const [optionsData, setOptionsData] = useState<OptionsData | null>(null);
-  // State for error messages
+  // State for storing error messages
   const [error, setError] = useState<APIError | null>(null);
-  // State for loading status
+  // State for tracking loading status
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Function to fetch stock and options data from the API
+  // Function to fetch both stock and options data
   const fetchData = useCallback(async () => {
     // Validate user input
     if (!symbol.trim()) {
@@ -47,33 +51,36 @@ const StockQuote: React.FC = () => {
       return;
     }
 
-    // Reset states before fetching
+    // Set loading state and reset data and error states
     setLoading(true);
     setError(null);
     setStockData(null);
     setOptionsData(null);
 
     try {
-      // Fetch stock quote data
+      // Construct URL for fetching stock quote data
       const quoteUrl = new URL("https://www.alphavantage.co/query");
       quoteUrl.searchParams.append("function", "GLOBAL_QUOTE");
       quoteUrl.searchParams.append("symbol", symbol);
       quoteUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
 
+      // Fetch stock quote data
       const quoteResponse = await fetch(quoteUrl.toString());
 
-      // Check for HTTP errors
+      // Check for HTTP errors in the response
       if (!quoteResponse.ok) {
         throw new Error(`HTTP error! status: ${quoteResponse.status}`);
       }
 
+      // Parse the JSON response
       const quoteData = await quoteResponse.json();
 
-      // Check for API errors or empty responses
+      // Check for API-specific error messages
       if (quoteData["Error Message"]) {
         throw new Error(quoteData["Error Message"]);
       }
 
+      // Extract the Global Quote object from the response
       const quote = quoteData["Global Quote"];
       if (!quote || Object.keys(quote).length === 0) {
         throw new Error("No quote data found for this symbol");
@@ -82,29 +89,32 @@ const StockQuote: React.FC = () => {
       // Set the stock data state with the received quote
       setStockData(quote);
 
-      // Fetch options chain data
+      // Construct URL for fetching options chain data
       const optionsUrl = new URL("https://www.alphavantage.co/query");
       optionsUrl.searchParams.append("function", "OPTIONS_CHAIN");
       optionsUrl.searchParams.append("symbol", symbol);
       optionsUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
 
+      // Fetch options chain data
       const optionsResponse = await fetch(optionsUrl.toString());
 
+      // Check for HTTP errors in the options response
       if (!optionsResponse.ok) {
         throw new Error(`HTTP error! status: ${optionsResponse.status}`);
       }
 
+      // Parse the JSON response for options data
       const optionsData = await optionsResponse.json();
 
-      // Process and set options data
-      // Note: Adjust this according to the actual structure of Alpha Vantage's options chain response
+      // Set the options data state
+      // Note: The structure here might need adjustment based on actual API response
       setOptionsData({
         calls: optionsData.calls || [],
         puts: optionsData.puts || []
       });
 
     } catch (err) {
-      // Handle different types of errors
+      // Error handling for different error types
       if (err instanceof Error) {
         setError({ message: err.message });
       } else if (typeof err === "string") {
@@ -113,28 +123,30 @@ const StockQuote: React.FC = () => {
         setError({ message: "An unknown error occurred" });
       }
     } finally {
-      // Always set loading to false when done
+      // Set loading to false regardless of success or failure
       setLoading(false);
     }
-  }, [symbol]);
+  }, [symbol]); // Dependency array for useCallback
 
-  // Handle 'Enter' key press in the input field
+  // Function to handle 'Enter' key press in the input field
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       fetchData();
     }
   };
 
-  // Format the key names for display
+  // Function to format the key names for display
   const formatKey = (key: string): string => {
     return key.split(". ")[1]?.replace(/([A-Z])/g, " $1").trim() || key;
   };
 
+  // Render the component
   return (
     <div className="bg-white shadow-md rounded-lg p-6">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">
         Stock Quote and Options Chain
       </h2>
+      {/* Input field for stock symbol */}
       <div className="mb-4">
         <input
           type="text"
@@ -146,6 +158,7 @@ const StockQuote: React.FC = () => {
           aria-label="Stock Symbol"
         />
       </div>
+      {/* Button to trigger data fetching */}
       <button
         onClick={fetchData}
         disabled={loading}
@@ -162,7 +175,7 @@ const StockQuote: React.FC = () => {
         </p>
       )}
       
-      {/* Display stock quote data if it exists */}
+      {/* Display stock quote data if available */}
       {stockData && (
         <div className="mt-6 sticky top-0 bg-white z-10 p-4 border-b">
           <h3 className="text-xl font-bold mb-2">Stock Quote</h3>
@@ -177,7 +190,7 @@ const StockQuote: React.FC = () => {
         </div>
       )}
       
-      {/* Display options chain data if it exists */}
+      {/* Display options chain data if available */}
       {optionsData && (
         <div className="mt-6">
           <h3 className="text-xl font-bold mb-2">Options Chain</h3>
@@ -195,6 +208,7 @@ const StockQuote: React.FC = () => {
               </thead>
             {/* Table body */}
               <tbody className="bg-white divide-y divide-gray-200">
+                {/* Map over both calls and puts to create table rows */}
                 {[...optionsData.calls, ...optionsData.puts].map((option, index) => (
                   <tr key={index} className={option.contractType === 'CALL' ? 'bg-green-50' : 'bg-red-50'}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{option.contractType}</td>
