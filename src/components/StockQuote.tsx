@@ -1,9 +1,6 @@
 // Import React and useState hook from the React library
 import React, { useState } from "react";
 
-// Define the API key for Alpha Vantage (replace with your actual key)
-const API_KEY = "YOUR_ALPHA_VANTAGE_API_KEY";
-
 // Define an interface for the stock data structure
 // This allows for any string key with a string value
 interface StockData {
@@ -34,9 +31,9 @@ const StockQuote: React.FC = () => {
     setError(null);
 
     try {
-      // Fetch data from Alpha Vantage API
+      // Fetch data from Alpha Vantage API using the environment variable
       const response = await fetch(
-        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEY}`
+        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_API_KEY}`
       );
 
       // Check if the response is ok (status in the range 200-299)
