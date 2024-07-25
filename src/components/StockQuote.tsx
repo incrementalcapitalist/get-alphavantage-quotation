@@ -1,5 +1,5 @@
-// Import necessary hooks from React
-import React, { useState, useCallback } from 'react';
+// Import necessary hooks and functions from React
+import React, { useState, useCallback, useMemo } from 'react';
 
 // Define types for API responses and errors
 type APIError = {
@@ -30,6 +30,12 @@ interface OptionsData {
   puts: OptionContract[];
 }
 
+// Define the type for sorting keys
+type SortKey = 'strikePrice' | 'lastPrice' | 'bid' | 'ask' | 'expiration';
+
+// Define the type for filter options
+type FilterOption = 'ALL' | 'CALLS' | 'PUTS';
+
 // Define the StockQuote functional component
 const StockQuote: React.FC = () => {
   // State for the stock symbol input
@@ -42,6 +48,12 @@ const StockQuote: React.FC = () => {
   const [error, setError] = useState<APIError | null>(null);
   // State for tracking loading status
   const [loading, setLoading] = useState<boolean>(false);
+  // State for sorting key and direction
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'strikePrice', direction: 'ascending' });
+  // State for filtering options
+  const [filterOption, setFilterOption] = useState<FilterOption>('ALL');
+  // State for expiration date filter
+  const [expirationFilter, setExpirationFilter] = useState<string>('');
 
   // Function to fetch both stock and options data
   const fetchData = useCallback(async () => {
@@ -140,6 +152,51 @@ const StockQuote: React.FC = () => {
     return key.split(". ")[1]?.replace(/([A-Z])/g, " $1").trim() || key;
   };
 
+  // Function to handle sorting
+  const handleSort = (key: SortKey) => {
+    setSortConfig((prevConfig) => ({
+      key,
+      direction: prevConfig.key === key && prevConfig.direction === 'ascending' ? 'descending' : 'ascending',
+    }));
+  };
+
+  // Function to get sorted and filtered options data
+  const sortedAndFilteredOptions = useMemo(() => {
+    if (!optionsData) return [];
+
+    // Combine calls and puts based on the filter
+    let filteredOptions = 
+      filterOption === 'CALLS' ? optionsData.calls :
+      filterOption === 'PUTS' ? optionsData.puts :
+      [...optionsData.calls, ...optionsData.puts];
+
+    // Apply expiration date filter
+    if (expirationFilter) {
+      filteredOptions = filteredOptions.filter(option => option.expiration === expirationFilter);
+    }
+
+    // Sort the filtered options
+    return filteredOptions.sort((a, b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (a[sortConfig.key] > b[sortConfig.key]) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [optionsData, sortConfig, filterOption, expirationFilter]);
+
+  // Function to get unique expiration dates
+  const expirationDates = useMemo(() => {
+    if (!optionsData) return [];
+    const dates = new Set([
+      ...optionsData.calls.map(option => option.expiration),
+      ...optionsData.puts.map(option => option.expiration)
+    ]);
+    return Array.from(dates).sort();
+  }, [optionsData]);
+
   // Render the component
   return (
     <div className="bg-white shadow-md rounded-lg p-6">
@@ -194,22 +251,56 @@ const StockQuote: React.FC = () => {
       {optionsData && (
         <div className="mt-6">
           <h3 className="text-xl font-bold mb-2">Options Chain</h3>
+          
+          {/* Filter controls */}
+          <div className="mb-4 flex space-x-4">
+            <select
+              value={filterOption}
+              onChange={(e) => setFilterOption(e.target.value as FilterOption)}
+              className="p-2 border border-gray-300 rounded-md"
+            >
+              <option value="ALL">All Options</option>
+              <option value="CALLS">Calls Only</option>
+              <option value="PUTS">Puts Only</option>
+            </select>
+            <select
+              value={expirationFilter}
+              onChange={(e) => setExpirationFilter(e.target.value)}
+              className="p-2 border border-gray-300 rounded-md"
+            >
+              <option value="">All Expiration Dates</option>
+              {expirationDates.map(date => (
+                <option key={date} value={date}>{date}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Strike</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bid</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ask</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiration</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('strikePrice')}>
+                    Strike {sortConfig.key === 'strikePrice' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('lastPrice')}>
+                    Last {sortConfig.key === 'lastPrice' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('bid')}>
+                    Bid {sortConfig.key === 'bid' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('ask')}>
+                    Ask {sortConfig.key === 'ask' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('expiration')}>
+                    Expiration {sortConfig.key === 'expiration' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                  </th>
                 </tr>
               </thead>
             {/* Table body */}
               <tbody className="bg-white divide-y divide-gray-200">
-                {/* Map over both calls and puts to create table rows */}
-                {[...optionsData.calls, ...optionsData.puts].map((option, index) => (
+                {/* Map over sorted and filtered options to create table rows */}
+                {sortedAndFilteredOptions.map((option, index) => (
                   <tr key={index} className={option.contractType === 'CALL' ? 'bg-green-50' : 'bg-red-50'}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{option.contractType}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.strikePrice}</td>
