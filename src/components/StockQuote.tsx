@@ -7,52 +7,49 @@ type APIError = {
   code?: string;
 };
 
-// Interface for stock data, allowing any string key with a string value
+// Interface for stock data
 interface StockData {
-  [key: string]: string;
+  symbol: string;
+  companyName: string;
+  lastSalePrice: string;
+  netChange: string;
+  percentageChange: string;
+  volume: string;
 }
 
-// Interface defining the structure of an option contract
+// Interface for option contract
 interface OptionContract {
-  contractName: string;
-  contractType: 'CALL' | 'PUT';
+  symbol: string;
+  callPut: 'call' | 'put';
+  expirationDate: string;
   strikePrice: string;
   lastPrice: string;
   bid: string;
   ask: string;
-  expiration: string;
-  // Add other relevant fields as needed
-}
-
-// Interface for the entire options chain data
-interface OptionsData {
-  calls: OptionContract[];
-  puts: OptionContract[];
+  volume: string;
+  openInterest: string;
+  delta?: string;
+  gamma?: string;
+  theta?: string;
+  vega?: string;
 }
 
 // Define the type for sorting keys
-type SortKey = 'strikePrice' | 'lastPrice' | 'bid' | 'ask' | 'expiration';
+type SortKey = keyof OptionContract;
 
 // Define the type for filter options
 type FilterOption = 'ALL' | 'CALLS' | 'PUTS';
 
 // Define the StockQuote functional component
 const StockQuote: React.FC = () => {
-  // State for the stock symbol input
+  // State declarations
   const [symbol, setSymbol] = useState<string>("");
-  // State for storing fetched stock data
   const [stockData, setStockData] = useState<StockData | null>(null);
-  // State for storing fetched options data
-  const [optionsData, setOptionsData] = useState<OptionsData | null>(null);
-  // State for storing error messages
+  const [optionsData, setOptionsData] = useState<OptionContract[]>([]);
   const [error, setError] = useState<APIError | null>(null);
-  // State for tracking loading status
   const [loading, setLoading] = useState<boolean>(false);
-  // State for sorting key and direction
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'strikePrice', direction: 'ascending' });
-  // State for filtering options
   const [filterOption, setFilterOption] = useState<FilterOption>('ALL');
-  // State for expiration date filter
   const [expirationFilter, setExpirationFilter] = useState<string>('');
 
   // Function to fetch both stock and options data
@@ -67,19 +64,16 @@ const StockQuote: React.FC = () => {
     setLoading(true);
     setError(null);
     setStockData(null);
-    setOptionsData(null);
+    setOptionsData([]);
 
     try {
-      // Construct URL for fetching stock quote data
-      const quoteUrl = new URL("https://www.alphavantage.co/query");
-      quoteUrl.searchParams.append("function", "GLOBAL_QUOTE");
-      quoteUrl.searchParams.append("symbol", symbol);
-      quoteUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
+      // Fetch stock quote data from NASDAQ API
+      const quoteResponse = await fetch(`https://api.nasdaq.com/api/quote/${symbol}/info?assetclass=stocks`, {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_NASDAQ_API_KEY}`
+        }
+      });
 
-      // Fetch stock quote data
-      const quoteResponse = await fetch(quoteUrl.toString());
-
-      // Check for HTTP errors in the response
       if (!quoteResponse.ok) {
         throw new Error(`HTTP error! status: ${quoteResponse.status}`);
       }
@@ -87,30 +81,26 @@ const StockQuote: React.FC = () => {
       // Parse the JSON response
       const quoteData = await quoteResponse.json();
 
-      // Check for API-specific error messages
-      if (quoteData["Error Message"]) {
-        throw new Error(quoteData["Error Message"]);
+      if (quoteData.data) {
+        setStockData({
+          symbol: quoteData.data.symbol,
+          companyName: quoteData.data.companyName,
+          lastSalePrice: quoteData.data.primaryData.lastSalePrice,
+          netChange: quoteData.data.primaryData.netChange,
+          percentageChange: quoteData.data.primaryData.percentageChange,
+          volume: quoteData.data.primaryData.volume
+        });
+      } else {
+        throw new Error("No stock data found for this symbol");
       }
 
-      // Extract the Global Quote object from the response
-      const quote = quoteData["Global Quote"];
-      if (!quote || Object.keys(quote).length === 0) {
-        throw new Error("No quote data found for this symbol");
-      }
+      // Fetch options chain data from NASDAQ API
+      const optionsResponse = await fetch(`https://api.nasdaq.com/api/quote/${symbol}/option-chain?assetclass=stocks&limit=100`, {
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_NASDAQ_API_KEY}`
+        }
+      });
 
-      // Set the stock data state with the received quote
-      setStockData(quote);
-
-      // Construct URL for fetching options chain data
-      const optionsUrl = new URL("https://www.alphavantage.co/query");
-      optionsUrl.searchParams.append("function", "OPTIONS_CHAIN");
-      optionsUrl.searchParams.append("symbol", symbol);
-      optionsUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
-
-      // Fetch options chain data
-      const optionsResponse = await fetch(optionsUrl.toString());
-
-      // Check for HTTP errors in the options response
       if (!optionsResponse.ok) {
         throw new Error(`HTTP error! status: ${optionsResponse.status}`);
       }
@@ -118,12 +108,25 @@ const StockQuote: React.FC = () => {
       // Parse the JSON response for options data
       const optionsData = await optionsResponse.json();
 
-      // Set the options data state
-      // Note: The structure here might need adjustment based on actual API response
-      setOptionsData({
-        calls: optionsData.calls || [],
-        puts: optionsData.puts || []
-      });
+      if (optionsData.data && optionsData.data.table && optionsData.data.table.rows) {
+        setOptionsData(optionsData.data.table.rows.map((row: any) => ({
+          symbol: row.symbol,
+          callPut: row.callPut,
+          expirationDate: row.expiryDate,
+          strikePrice: row.strike,
+          lastPrice: row.lastPrice,
+          bid: row.bid,
+          ask: row.ask,
+          volume: row.volume,
+          openInterest: row.openInterest,
+          delta: row.delta,
+          gamma: row.gamma,
+          theta: row.theta,
+          vega: row.vega
+        })));
+      } else {
+        throw new Error("No options data found for this symbol");
+      }
 
     } catch (err) {
       // Error handling for different error types
@@ -147,11 +150,6 @@ const StockQuote: React.FC = () => {
     }
   };
 
-  // Function to format the key names for display
-  const formatKey = (key: string): string => {
-    return key.split(". ")[1]?.replace(/([A-Z])/g, " $1").trim() || key;
-  };
-
   // Function to handle sorting
   const handleSort = (key: SortKey) => {
     setSortConfig((prevConfig) => ({
@@ -160,19 +158,20 @@ const StockQuote: React.FC = () => {
     }));
   };
 
-  // Function to get sorted and filtered options data
+  // Memoized sorted and filtered options data
   const sortedAndFilteredOptions = useMemo(() => {
-    if (!optionsData) return [];
+    let filteredOptions = optionsData;
 
-    // Combine calls and puts based on the filter
-    let filteredOptions = 
-      filterOption === 'CALLS' ? optionsData.calls :
-      filterOption === 'PUTS' ? optionsData.puts :
-      [...optionsData.calls, ...optionsData.puts];
+    // Apply call/put filter
+    if (filterOption === 'CALLS') {
+      filteredOptions = filteredOptions.filter(option => option.callPut === 'call');
+    } else if (filterOption === 'PUTS') {
+      filteredOptions = filteredOptions.filter(option => option.callPut === 'put');
+    }
 
     // Apply expiration date filter
     if (expirationFilter) {
-      filteredOptions = filteredOptions.filter(option => option.expiration === expirationFilter);
+      filteredOptions = filteredOptions.filter(option => option.expirationDate === expirationFilter);
     }
 
     // Sort the filtered options
@@ -187,13 +186,9 @@ const StockQuote: React.FC = () => {
     });
   }, [optionsData, sortConfig, filterOption, expirationFilter]);
 
-  // Function to get unique expiration dates
+  // Memoized unique expiration dates
   const expirationDates = useMemo(() => {
-    if (!optionsData) return [];
-    const dates = new Set([
-      ...optionsData.calls.map(option => option.expiration),
-      ...optionsData.puts.map(option => option.expiration)
-    ]);
+    const dates = new Set(optionsData.map(option => option.expirationDate));
     return Array.from(dates).sort();
   }, [optionsData]);
 
@@ -201,7 +196,7 @@ const StockQuote: React.FC = () => {
   return (
     <div className="bg-white shadow-md rounded-lg p-6">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">
-        Stock Quote and Options Chain
+        Stock Quote and Options Chain (NASDAQ Data)
       </h2>
       {/* Input field for stock symbol */}
       <div className="mb-4">
@@ -237,18 +232,36 @@ const StockQuote: React.FC = () => {
         <div className="mt-6 sticky top-0 bg-white z-10 p-4 border-b">
           <h3 className="text-xl font-bold mb-2">Stock Quote</h3>
           <div className="grid grid-cols-2 gap-4">
-            {Object.entries(stockData).map(([key, value]) => (
-              <div key={key} className="flex justify-between">
-                <span className="font-medium">{formatKey(key)}:</span>
-                <span>{value}</span>
-              </div>
-            ))}
+            <div className="flex justify-between">
+              <span className="font-medium">Symbol:</span>
+              <span>{stockData.symbol}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Company Name:</span>
+              <span>{stockData.companyName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Last Sale Price:</span>
+              <span>{stockData.lastSalePrice}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Net Change:</span>
+              <span>{stockData.netChange}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Percentage Change:</span>
+              <span>{stockData.percentageChange}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Volume:</span>
+              <span>{stockData.volume}</span>
+            </div>
           </div>
         </div>
       )}
       
       {/* Display options chain data if available */}
-      {optionsData && (
+      {optionsData.length > 0 && (
         <div className="mt-6">
           <h3 className="text-xl font-bold mb-2">Options Chain</h3>
           
@@ -279,35 +292,32 @@ const StockQuote: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('strikePrice')}>
-                    Strike {sortConfig.key === 'strikePrice' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('lastPrice')}>
-                    Last {sortConfig.key === 'lastPrice' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('bid')}>
-                    Bid {sortConfig.key === 'bid' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('ask')}>
-                    Ask {sortConfig.key === 'ask' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('expiration')}>
-                    Expiration {sortConfig.key === 'expiration' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                  </th>
+                  {['Type', 'Strike', 'Last', 'Bid', 'Ask', 'Volume', 'Open Int.', 'Delta', 'Gamma', 'Theta', 'Vega', 'Expiration'].map((header) => (
+                    <th
+                      key={header}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                      onClick={() => handleSort(header.toLowerCase().replace(' ', '') as SortKey)}
+                    >
+                      {header} {sortConfig.key === header.toLowerCase().replace(' ', '') && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-            {/* Table body */}
               <tbody className="bg-white divide-y divide-gray-200">
-                {/* Map over sorted and filtered options to create table rows */}
                 {sortedAndFilteredOptions.map((option, index) => (
-                  <tr key={index} className={option.contractType === 'CALL' ? 'bg-green-50' : 'bg-red-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{option.contractType}</td>
+                  <tr key={index} className={option.callPut === 'call' ? 'bg-green-50' : 'bg-red-50'}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{option.callPut.toUpperCase()}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.strikePrice}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.lastPrice}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.bid}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.ask}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.expiration}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.volume}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.openInterest}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.delta}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.gamma}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.theta}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.vega}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{option.expirationDate}</td>
                   </tr>
                 ))}
               </tbody>
