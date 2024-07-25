@@ -42,14 +42,21 @@ type FilterOption = 'ALL' | 'CALLS' | 'PUTS';
 
 // Define the StockQuote functional component
 const StockQuote: React.FC = () => {
-  // State declarations
+  // State for the stock symbol input
   const [symbol, setSymbol] = useState<string>("");
+  // State for storing fetched stock data
   const [stockData, setStockData] = useState<StockData | null>(null);
+  // State for storing fetched options data
   const [optionsData, setOptionsData] = useState<OptionContract[]>([]);
+  // State for storing error messages
   const [error, setError] = useState<APIError | null>(null);
+  // State for tracking loading status
   const [loading, setLoading] = useState<boolean>(false);
+  // State for sorting configuration
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'strikePrice', direction: 'ascending' });
+  // State for filtering options (ALL, CALLS, PUTS)
   const [filterOption, setFilterOption] = useState<FilterOption>('ALL');
+  // State for filtering by expiration date
   const [expirationFilter, setExpirationFilter] = useState<string>('');
 
   // Function to fetch both stock and options data
@@ -151,11 +158,14 @@ const StockQuote: React.FC = () => {
   };
 
   // Function to handle sorting
-  const handleSort = (key: SortKey) => {
-    setSortConfig((prevConfig) => ({
-      key,
-      direction: prevConfig.key === key && prevConfig.direction === 'ascending' ? 'descending' : 'ascending',
-    }));
+  const handleSort = (key: string) => {
+    const validKey = key as keyof OptionContract;
+    if (optionsData.length > 0 && validKey in optionsData[0]) {
+      setSortConfig((prevConfig) => ({
+        key: validKey,
+        direction: prevConfig.key === validKey && prevConfig.direction === 'ascending' ? 'descending' : 'ascending',
+      }));
+    }
   };
 
   // Memoized sorted and filtered options data
@@ -176,12 +186,26 @@ const StockQuote: React.FC = () => {
 
     // Sort the filtered options
     return filteredOptions.sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+
+      if (aValue === undefined && bValue === undefined) return 0;
+      if (aValue === undefined) return 1;
+      if (bValue === undefined) return -1;
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortConfig.direction === 'ascending' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
       }
-      if (a[sortConfig.key] > b[sortConfig.key]) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortConfig.direction === 'ascending' 
+          ? aValue - bValue
+          : bValue - aValue;
       }
+
+      // If we can't compare, return 0 (no change in order)
       return 0;
     });
   }, [optionsData, sortConfig, filterOption, expirationFilter]);
@@ -296,7 +320,7 @@ const StockQuote: React.FC = () => {
                     <th
                       key={header}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSort(header.toLowerCase().replace(' ', '') as SortKey)}
+                      onClick={() => handleSort(header.toLowerCase().replace(' ', ''))}
                     >
                       {header} {sortConfig.key === header.toLowerCase().replace(' ', '') && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </th>
