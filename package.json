@@ -4,7 +4,8 @@
   "description": "A simple Node.js application using Express to retrieve stock quotes from the Alpha Vantage API.",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js",
+    "build": "node index.js"
   },
   "dependencies": {
     "axios": "^0.27.2",
