@@ -2,10 +2,10 @@
   "name": "stock-quote-app",
   "version": "1.0.0",
   "description": "A simple Node.js application using Express to retrieve stock quotes from the Alpha Vantage API.",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
-    "build": "node index.js"
+    "start": "node server.js",
+    "build": "node server.js"
   },
   "dependencies": {
     "axios": "^0.27.2",
