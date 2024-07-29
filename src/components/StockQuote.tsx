@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createChart } from "lightweight-charts";
+import { createChart, IChartApi } from "lightweight-charts";
+import { ParsedUrlQueryInput, stringify } from 'querystring';
 
 // Define types for the API response and errors
 type APIError = {
@@ -7,8 +8,41 @@ type APIError = {
   code?: string;
 };
 
+// Interface for the stock quote data
 interface StockData {
   [key: string]: string;
+}
+
+// Interface for the AlphaVantage API response
+interface AlphaVantageResponse {
+  'Meta Data': {
+    '1. Information': string;
+    '2. Symbol': string;
+    '3. Last Refreshed': string;
+    '4. Output Size': string;
+    '5. Time Zone': string;
+  };
+  'Time Series (Daily)': {
+    [date: string]: {
+      '1. open': string;
+      '2. high': string;
+      '3. low': string;
+      '4. close': string;
+      '5. adjusted close': string;
+      '6. volume': string;
+      '7. dividend amount': string;
+      '8. split coefficient': string;
+    };
+  };
+  'Global Quote'?: {
+    [key: string]: string;
+  };
+}
+
+// Interface for the chart data point
+interface ChartDataPoint {
+  time: string;
+  value: number;
 }
 
 const StockQuote: React.FC = () => {
@@ -16,15 +50,17 @@ const StockQuote: React.FC = () => {
   const [symbol, setSymbol] = useState<string>("");
   // State for API response data
   const [stockData, setStockData] = useState<StockData | null>(null);
-  // State for error messages (now using APIError type)
+  // State for error messages
   const [error, setError] = useState<APIError | null>(null);
   // State for loading status
   const [loading, setLoading] = useState<boolean>(false);
   // State for historical data
-  const [historicalData, setHistoricalData] = useState<any[]>([]);
+  const [historicalData, setHistoricalData] = useState<ChartDataPoint[]>([]);
 
+  // Ref for the chart container div
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
+  // Ref for the chart instance
+  const chartRef = useRef<IChartApi | null>(null);
 
   // Function to fetch stock data from the API
   const fetchStockData = async () => {
@@ -40,14 +76,18 @@ const StockQuote: React.FC = () => {
     setStockData(null);
 
     try {
-      // Construct the API URL with the environment variable
-      const apiUrl = new URL("https://www.alphavantage.co/query");
-      apiUrl.searchParams.append("function", "GLOBAL_QUOTE");
-      apiUrl.searchParams.append("symbol", symbol);
-      apiUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
+      // Construct the API URL params
+      const params: ParsedUrlQueryInput = {
+        function: 'GLOBAL_QUOTE',
+        symbol,
+        apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
+      };
+
+      // Construct the full API URL
+      const apiUrl = `https://www.alphavantage.co/query?${stringify(params)}`;
 
       // Fetch data from Alpha Vantage API
-      const response = await fetch(apiUrl.toString());
+      const response = await fetch(apiUrl);
 
       // Check for HTTP errors
       if (!response.ok) {
@@ -55,17 +95,17 @@ const StockQuote: React.FC = () => {
       }
 
       // Parse the JSON response
-      const data = await response.json();
+      const data: AlphaVantageResponse = await response.json();
 
       // Log the response for debugging
       console.log("Global Quote Response:", data);
 
       // Check for API errors or empty responses
-      if (data["Error Message"]) {
-        throw new Error(data["Error Message"]);
+      if ('Error Message' in data) {
+        throw new Error(data['Error Message'] as string);
       }
 
-      const quote = data["Global Quote"];
+      const quote = data['Global Quote'];
       if (!quote || Object.keys(quote).length === 0) {
         throw new Error("No data found for this symbol");
       }
@@ -84,47 +124,64 @@ const StockQuote: React.FC = () => {
     }
   };
 
-  const fetchHistoricalData = async (symbol: string) => {
-    try {
-      const apiUrl = new URL("https://www.alphavantage.co/query");
-      apiUrl.searchParams.append("function", "TIME_SERIES_DAILY_ADJUSTED");
-      apiUrl.searchParams.append("symbol", symbol);
-      apiUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
+  // Function to fetch historical data
+  const fetchHistoricalData = async (symbol: string): Promise<void> => {
+    // Construct the API URL params
+    const params: ParsedUrlQueryInput = {
+      function: 'TIME_SERIES_DAILY_ADJUSTED',
+      symbol,
+      apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
+    };
 
-      const response = await fetch(apiUrl.toString());
+    // Construct the full API URL
+    const url = `https://www.alphavantage.co/query?${stringify(params)}`;
+
+    try {
+      // Fetch data from the API
+      const response = await fetch(url);
+      // Check for HTTP errors
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Parse the JSON response
+      const data: AlphaVantageResponse = await response.json();
 
       // Log the response for debugging
       console.log("Historical Data Response:", data);
 
-      if (data["Error Message"]) {
-        throw new Error(data["Error Message"]);
+      // Check for API errors
+      if ('Error Message' in data) {
+        throw new Error(data['Error Message'] as string);
       }
 
-      const timeSeries = data["Time Series (Daily)"];
+      // Extract the time series data
+      const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
-        throw new Error("No time series data found");
+        throw new Error('No time series data found');
       }
 
-      const chartData = Object.keys(timeSeries).map((date) => {
-        const dayData = timeSeries[date];
-        return {
+      // Transform the data into the format expected by the chart
+      const chartData: ChartDataPoint[] = Object.entries(timeSeries)
+        .map(([date, values]): ChartDataPoint => ({
           time: date,
-          value: parseFloat(dayData["4. close"]),
-        };
-      });
+          value: parseFloat(values['4. close']),
+        }))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
+      // Update the state with the processed historical data
       setHistoricalData(chartData);
-    } catch (err) {
-      handleError(err);
+    } catch (error) {
+      // Handle and rethrow errors
+      if (error instanceof Error) {
+        throw new Error(`Failed to fetch historical data: ${error.message}`);
+      }
+      throw new Error('An unknown error occurred while fetching historical data');
     }
   };
 
-  const handleError = (err: any) => {
+  // Function to handle errors
+  const handleError = (err: unknown) => {
     if (err instanceof Error) {
       setError({ message: err.message });
     } else if (typeof err === "string") {
@@ -134,13 +191,17 @@ const StockQuote: React.FC = () => {
     }
   };
 
+  // Effect to create and update the chart when historical data changes
   useEffect(() => {
     if (historicalData.length > 0 && chartContainerRef.current) {
+      // If the chart doesn't exist, create it
       if (!chartRef.current) {
         chartRef.current = createChart(chartContainerRef.current, { width: 600, height: 300 });
       }
 
+      // Add the area series to the chart
       const areaSeries = chartRef.current.addAreaSeries();
+      // Set the data for the area series
       areaSeries.setData(historicalData);
     }
   }, [historicalData]);
@@ -157,6 +218,7 @@ const StockQuote: React.FC = () => {
     return key.split(". ")[1]?.replace(/([A-Z])/g, " $1").trim() || key;
   };
 
+  // Render the component
   return (
     <div className="bg-white shadow-md rounded-lg p-6">
       <h2 className="text-2xl font-bold mb-4 text-gray-800">
