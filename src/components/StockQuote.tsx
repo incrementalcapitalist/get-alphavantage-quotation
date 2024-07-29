@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createChart, IChartApi } from "lightweight-charts";
-import { ParsedUrlQueryInput, stringify } from 'querystring';
 
 // Define types for the API response and errors
 type APIError = {
@@ -62,6 +61,15 @@ const StockQuote: React.FC = () => {
   // Ref for the chart instance
   const chartRef = useRef<IChartApi | null>(null);
 
+  // Function to construct API URL with parameters
+  const constructApiUrl = (baseUrl: string, params: Record<string, string>): string => {
+    const url = new URL(baseUrl);
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, value);
+    });
+    return url.toString();
+  };
+
   // Function to fetch stock data from the API
   const fetchStockData = async () => {
     // Validate user input
@@ -76,15 +84,12 @@ const StockQuote: React.FC = () => {
     setStockData(null);
 
     try {
-      // Construct the API URL params
-      const params: ParsedUrlQueryInput = {
+      // Construct the API URL
+      const apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
         function: 'GLOBAL_QUOTE',
         symbol,
         apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
-      };
-
-      // Construct the full API URL
-      const apiUrl = `https://www.alphavantage.co/query?${stringify(params)}`;
+      });
 
       // Fetch data from Alpha Vantage API
       const response = await fetch(apiUrl);
@@ -126,19 +131,16 @@ const StockQuote: React.FC = () => {
 
   // Function to fetch historical data
   const fetchHistoricalData = async (symbol: string): Promise<void> => {
-    // Construct the API URL params
-    const params: ParsedUrlQueryInput = {
+    // Construct the API URL
+    const apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
       function: 'TIME_SERIES_DAILY_ADJUSTED',
       symbol,
       apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
-    };
-
-    // Construct the full API URL
-    const url = `https://www.alphavantage.co/query?${stringify(params)}`;
+    });
 
     try {
       // Fetch data from the API
-      const response = await fetch(url);
+      const response = await fetch(apiUrl);
       // Check for HTTP errors
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
