@@ -365,6 +365,10 @@ const StockQuote: React.FC = () => {
           Error: {error.message}
         </p>
       )}
+      {/* Display the chart */}
+      <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-inner">
+        <div ref={chartContainerRef} className="w-full h-[400px]"></div>
+      </div>
       {/* Display stock data if it exists */}
       {stockData && (
         <div className="mt-6 overflow-x-auto">
@@ -396,10 +400,6 @@ const StockQuote: React.FC = () => {
           </table>
         </div>
       )}
-      {/* Display the chart */}
-      <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-inner">
-        <div ref={chartContainerRef} className="w-full h-[400px]"></div>
-      </div>
     </div>
   );
 };
