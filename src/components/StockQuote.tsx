@@ -287,12 +287,12 @@ const StockQuote: React.FC = () => {
           width: chartContainerRef.current.clientWidth,
           height: 400,
           layout: {
-            background: { color: '#ffffff' },
-            textColor: '#333',
+            background: { color: 'transparent' },
+            textColor: 'rgba(255, 255, 255, 0.9)',
           },
           grid: {
-            vertLines: { color: '#f0f0f0' },
-            horzLines: { color: '#f0f0f0' },
+            vertLines: { visible: false },
+            horzLines: { visible: false },
           },
         });
       }
