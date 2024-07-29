@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi } from "lightweight-charts";
 
 // Add type declarations for URL and URLSearchParams
 declare global {
@@ -52,6 +52,15 @@ interface ChartDataPoint {
   value: number;
 }
 
+// Interface for the Heikin-Ashi candle data point
+interface HeikinAshiDataPoint {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 const StockQuote: React.FC = () => {
   // State for user input
   const [symbol, setSymbol] = useState<string>("");
@@ -63,11 +72,15 @@ const StockQuote: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   // State for historical data
   const [historicalData, setHistoricalData] = useState<ChartDataPoint[]>([]);
+  // State for Heikin-Ashi data
+  const [heikinAshiData, setHeikinAshiData] = useState<HeikinAshiDataPoint[]>([]);
 
   // Ref for the chart container div
   const chartContainerRef = useRef<HTMLDivElement>(null);
   // Ref for the chart instance
   const chartRef = useRef<IChartApi | null>(null);
+  // Ref for the Heikin-Ashi series
+  const heikinAshiSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   // Function to construct API URL with parameters
   const constructApiUrl = (baseUrl: string, params: Record<string, string>): string => {
@@ -201,8 +214,12 @@ const StockQuote: React.FC = () => {
         }))
         .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
+      // Calculate Heikin-Ashi data
+      const heikinAshiData: HeikinAshiDataPoint[] = calculateHeikinAshi(chartData);
+
       // Update the state with the processed historical data
       setHistoricalData(chartData);
+      setHeikinAshiData(heikinAshiData);
     } catch (error) {
       // Handle and rethrow errors
       if (error instanceof Error) {
@@ -210,6 +227,29 @@ const StockQuote: React.FC = () => {
       }
       throw new Error('An unknown error occurred while fetching historical data');
     }
+  };
+
+  // Function to calculate Heikin-Ashi candles
+  const calculateHeikinAshi = (data: ChartDataPoint[]): HeikinAshiDataPoint[] => {
+    const heikinAshiData: HeikinAshiDataPoint[] = [];
+
+    data.forEach((point, index) => {
+      const previousPoint = heikinAshiData[index - 1];
+      const open = previousPoint ? (previousPoint.open + previousPoint.close) / 2 : point.value;
+      const close = (point.value + open + previousPoint?.low + previousPoint?.high) / 4;
+      const high = Math.max(point.value, open, close);
+      const low = Math.min(point.value, open, close);
+
+      heikinAshiData.push({
+        time: point.time,
+        open,
+        high,
+        low,
+        close,
+      });
+    });
+
+    return heikinAshiData;
   };
 
   // Function to handle errors
@@ -241,8 +281,15 @@ const StockQuote: React.FC = () => {
       const areaSeries = chartRef.current.addAreaSeries();
       // Set the data for the area series
       areaSeries.setData(historicalData);
+
+      // Add the Heikin-Ashi series to the chart
+      if (!heikinAshiSeriesRef.current) {
+        heikinAshiSeriesRef.current = chartRef.current.addCandlestickSeries();
+      }
+      // Set the data for the Heikin-Ashi series
+      heikinAshiSeriesRef.current.setData(heikinAshiData);
     }
-  }, [historicalData]);
+  }, [historicalData, heikinAshiData]);
 
   // Handle 'Enter' key press in the input field
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
