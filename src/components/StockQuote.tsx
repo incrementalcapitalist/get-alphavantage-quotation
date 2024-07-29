@@ -57,6 +57,9 @@ const StockQuote: React.FC = () => {
       // Parse the JSON response
       const data = await response.json();
 
+      // Log the response for debugging
+      console.log("Global Quote Response:", data);
+
       // Check for API errors or empty responses
       if (data["Error Message"]) {
         throw new Error(data["Error Message"]);
@@ -100,11 +103,19 @@ const StockQuote: React.FC = () => {
       }
 
       const data = await response.json();
+
+      // Log the response for debugging
+      console.log("Historical Data Response:", data);
+
       if (data["Error Message"]) {
         throw new Error(data["Error Message"]);
       }
 
       const timeSeries = data["Time Series (Daily)"];
+      if (!timeSeries) {
+        throw new Error("No time series data found");
+      }
+
       const chartData = Object.keys(timeSeries).map((date) => {
         const dayData = timeSeries[date];
         return {
