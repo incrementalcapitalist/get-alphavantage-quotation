@@ -228,7 +228,13 @@ const StockQuote: React.FC = () => {
     if (historicalData.length > 0 && chartContainerRef.current) {
       // If the chart doesn't exist, create it
       if (!chartRef.current) {
-        chartRef.current = createChart(chartContainerRef.current, { width: 600, height: 300 });
+        chartRef.current = createChart(chartContainerRef.current, {
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        });
+      } else {
+        // Update the chart dimensions if the container size changes
+        chartRef.current.resize(chartContainerRef.current.clientWidth, chartContainerRef.current.clientHeight);
       }
 
       // Add the area series to the chart
