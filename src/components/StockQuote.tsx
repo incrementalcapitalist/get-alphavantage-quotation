@@ -77,13 +77,7 @@ const StockQuote: React.FC = () => {
       await fetchHistoricalData(symbol);
     } catch (err) {
       // Handle different types of errors
-      if (err instanceof Error) {
-        setError({ message: err.message });
-      } else if (typeof err === "string") {
-        setError({ message: err });
-      } else {
-        setError({ message: "An unknown error occurred" });
-      }
+      handleError(err);
     } finally {
       // Always set loading to false when done
       setLoading(false);
@@ -126,13 +120,17 @@ const StockQuote: React.FC = () => {
 
       setHistoricalData(chartData);
     } catch (err) {
-      if (err instanceof Error) {
-        setError({ message: err.message });
-      } else if (typeof err === "string") {
-        setError({ message: err });
-      } else {
-        setError({ message: "An unknown error occurred" });
-      }
+      handleError(err);
+    }
+  };
+
+  const handleError = (err: any) => {
+    if (err instanceof Error) {
+      setError({ message: err.message });
+    } else if (typeof err === "string") {
+      setError({ message: err });
+    } else {
+      setError({ message: "An unknown error occurred" });
     }
   };
 
