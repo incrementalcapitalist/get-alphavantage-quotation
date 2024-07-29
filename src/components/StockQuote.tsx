@@ -1,7 +1,9 @@
+// Import necessary React hooks and types from react
 import React, { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi, CandlestickSeriesOptions } from "lightweight-charts";
+// Import required types and functions from lightweight-charts
+import { createChart, IChartApi, ISeriesApi } from "lightweight-charts";
 
-// Add type declarations for URL and URLSearchParams
+// Add type declarations for URL and URLSearchParams to the global scope
 declare global {
   interface Window {
     URL: typeof URL;
@@ -9,7 +11,7 @@ declare global {
   }
 }
 
-// Define types for the API response and errors
+// Define type for API errors
 type APIError = {
   message: string;
   code?: string;
@@ -61,8 +63,9 @@ interface HeikinAshiDataPoint {
   close: number;
 }
 
+// Define the StockQuote functional component
 const StockQuote: React.FC = () => {
-  // State for user input
+  // State for user input (stock symbol)
   const [symbol, setSymbol] = useState<string>("");
   // State for API response data
   const [stockData, setStockData] = useState<StockData | null>(null);
@@ -80,7 +83,7 @@ const StockQuote: React.FC = () => {
   // Ref for the chart instance
   const chartRef = useRef<IChartApi | null>(null);
   // Ref for the Heikin-Ashi series
-  const heikinAshiSeriesRef = useRef<ReturnType<IChartApi['addCandlestickSeries']> | null>(null);
+  const heikinAshiSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
 
   // Function to construct API URL with parameters
   const constructApiUrl = (baseUrl: string, params: Record<string, string>): string => {
@@ -105,7 +108,7 @@ const StockQuote: React.FC = () => {
     setStockData(null);
 
     try {
-      // Construct the API URL
+      // Construct the API URL for global quote
       const apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
         function: 'GLOBAL_QUOTE',
         symbol,
@@ -206,7 +209,7 @@ const StockQuote: React.FC = () => {
         }
       }
 
-      // Transform the data into Heikin-Ashi format
+      // Calculate Heikin-Ashi data
       const heikinAshiData: HeikinAshiDataPoint[] = calculateHeikinAshi(timeSeries);
 
       // Update the state with the processed Heikin-Ashi data
@@ -223,9 +226,10 @@ const StockQuote: React.FC = () => {
   // Function to calculate Heikin-Ashi candles
   const calculateHeikinAshi = (timeSeries: AlphaVantageResponse['Time Series (Daily)']): HeikinAshiDataPoint[] => {
     const heikinAshiData: HeikinAshiDataPoint[] = [];
-    let prevHA = null;
+    let prevHA: HeikinAshiDataPoint | null = null;
 
     Object.entries(timeSeries).forEach(([date, values], index) => {
+      // Parse OHLC values
       const open = parseFloat(values['1. open']);
       const high = parseFloat(values['2. high']);
       const low = parseFloat(values['3. low']);
@@ -234,16 +238,20 @@ const StockQuote: React.FC = () => {
       let haOpen, haClose, haHigh, haLow;
 
       if (index === 0) {
+        // For the first candle, use regular values
         haOpen = open;
         haClose = close;
       } else {
+        // Calculate Heikin-Ashi values
         haOpen = (prevHA!.open + prevHA!.close) / 2;
         haClose = (open + high + low + close) / 4;
       }
 
+      // Calculate Heikin-Ashi high and low
       haHigh = Math.max(high, haOpen, haClose);
       haLow = Math.min(low, haOpen, haClose);
 
+      // Create Heikin-Ashi candle
       const haCandle: HeikinAshiDataPoint = {
         time: date,
         open: haOpen,
@@ -259,9 +267,21 @@ const StockQuote: React.FC = () => {
     return heikinAshiData.reverse(); // Reverse to get chronological order
   };
 
+  // Function to handle errors
+  const handleError = (err: unknown) => {
+    if (err instanceof Error) {
+      setError({ message: err.message });
+    } else if (typeof err === "string") {
+      setError({ message: err });
+    } else {
+      setError({ message: "An unknown error occurred" });
+    }
+  };
+
   // Effect to create and update the chart when Heikin-Ashi data changes
   useEffect(() => {
     if (heikinAshiData.length > 0 && chartContainerRef.current) {
+      // If the chart doesn't exist, create it
       if (!chartRef.current) {
         chartRef.current = createChart(chartContainerRef.current, {
           width: chartContainerRef.current.clientWidth,
@@ -277,6 +297,7 @@ const StockQuote: React.FC = () => {
         });
       }
 
+      // If Heikin-Ashi series doesn't exist, create it
       if (!heikinAshiSeriesRef.current) {
         heikinAshiSeriesRef.current = chartRef.current.addCandlestickSeries({
           upColor: '#26a69a',
@@ -287,11 +308,20 @@ const StockQuote: React.FC = () => {
         });
       }
 
+      // Set the data for the Heikin-Ashi series
       heikinAshiSeriesRef.current.setData(heikinAshiData);
 
+      // Fit the chart content
       chartRef.current.timeScale().fitContent();
     }
   }, [heikinAshiData]);
+
+  // Handle 'Enter' key press in the input field
+  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      fetchStockData();
+    }
+  };
 
   // Format the key names for display
   const formatKey = (key: string): string => {
