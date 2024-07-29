@@ -297,7 +297,10 @@ const StockQuote: React.FC = () => {
           timeScale: {
             visible: false,
           },
-          priceScale: {
+          rightPriceScale: {
+            visible: false,
+          },
+          leftPriceScale: {
             visible: false,
           },
         });
