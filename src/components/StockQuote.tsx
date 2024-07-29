@@ -288,7 +288,7 @@ const StockQuote: React.FC = () => {
           height: 400,
           layout: {
             background: { color: 'transparent' },
-            textColor: 'rgba(255, 255, 255, 0.9)',
+            textColor: 'rgba(0, 0, 0, 0.9)',
           },
           grid: {
             vertLines: { visible: false },
