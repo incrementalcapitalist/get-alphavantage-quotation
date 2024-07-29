@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createChart, IChartApi } from "lightweight-charts";
 
+// Add type declarations for URL and URLSearchParams
+declare global {
+  interface Window {
+    URL: typeof URL;
+    URLSearchParams: typeof URLSearchParams;
+  }
+}
+
 // Define types for the API response and errors
 type APIError = {
   message: string;
