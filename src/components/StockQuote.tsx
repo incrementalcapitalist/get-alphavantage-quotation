@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi, ISeriesApi } from "lightweight-charts";
+import { createChart, IChartApi, CandlestickSeriesOptions } from "lightweight-charts";
 
 // Add type declarations for URL and URLSearchParams
 declare global {
@@ -80,7 +80,7 @@ const StockQuote: React.FC = () => {
   // Ref for the chart instance
   const chartRef = useRef<IChartApi | null>(null);
   // Ref for the Heikin-Ashi series
-  const heikinAshiSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const heikinAshiSeriesRef = useRef<ReturnType<IChartApi['addCandlestickSeries']> | null>(null);
 
   // Function to construct API URL with parameters
   const constructApiUrl = (baseUrl: string, params: Record<string, string>): string => {
@@ -206,19 +206,10 @@ const StockQuote: React.FC = () => {
         }
       }
 
-      // Transform the data into the format expected by the chart
-      const chartData: ChartDataPoint[] = Object.entries(timeSeries)
-        .map(([date, values]): ChartDataPoint => ({
-          time: date,
-          value: parseFloat(values['4. close']),
-        }))
-        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+      // Transform the data into Heikin-Ashi format
+      const heikinAshiData: HeikinAshiDataPoint[] = calculateHeikinAshi(timeSeries);
 
-      // Calculate Heikin-Ashi data
-      const heikinAshiData: HeikinAshiDataPoint[] = calculateHeikinAshi(chartData);
-
-      // Update the state with the processed historical data
-      setHistoricalData(chartData);
+      // Update the state with the processed Heikin-Ashi data
       setHeikinAshiData(heikinAshiData);
     } catch (error) {
       // Handle and rethrow errors
@@ -230,73 +221,77 @@ const StockQuote: React.FC = () => {
   };
 
   // Function to calculate Heikin-Ashi candles
-  const calculateHeikinAshi = (data: ChartDataPoint[]): HeikinAshiDataPoint[] => {
+  const calculateHeikinAshi = (timeSeries: AlphaVantageResponse['Time Series (Daily)']): HeikinAshiDataPoint[] => {
     const heikinAshiData: HeikinAshiDataPoint[] = [];
+    let prevHA = null;
 
-    data.forEach((point, index) => {
-      const previousPoint = heikinAshiData[index - 1];
-      const open = previousPoint ? (previousPoint.open + previousPoint.close) / 2 : point.value;
-      const close = (point.value + open + previousPoint?.low + previousPoint?.high) / 4;
-      const high = Math.max(point.value, open, close);
-      const low = Math.min(point.value, open, close);
+    Object.entries(timeSeries).forEach(([date, values], index) => {
+      const open = parseFloat(values['1. open']);
+      const high = parseFloat(values['2. high']);
+      const low = parseFloat(values['3. low']);
+      const close = parseFloat(values['4. close']);
 
-      heikinAshiData.push({
-        time: point.time,
-        open,
-        high,
-        low,
-        close,
-      });
+      let haOpen, haClose, haHigh, haLow;
+
+      if (index === 0) {
+        haOpen = open;
+        haClose = close;
+      } else {
+        haOpen = (prevHA!.open + prevHA!.close) / 2;
+        haClose = (open + high + low + close) / 4;
+      }
+
+      haHigh = Math.max(high, haOpen, haClose);
+      haLow = Math.min(low, haOpen, haClose);
+
+      const haCandle: HeikinAshiDataPoint = {
+        time: date,
+        open: haOpen,
+        high: haHigh,
+        low: haLow,
+        close: haClose
+      };
+
+      heikinAshiData.push(haCandle);
+      prevHA = haCandle;
     });
 
-    return heikinAshiData;
+    return heikinAshiData.reverse(); // Reverse to get chronological order
   };
 
-  // Function to handle errors
-  const handleError = (err: unknown) => {
-    if (err instanceof Error) {
-      setError({ message: err.message });
-    } else if (typeof err === "string") {
-      setError({ message: err });
-    } else {
-      setError({ message: "An unknown error occurred" });
-    }
-  };
-
-  // Effect to create and update the chart when historical data changes
+  // Effect to create and update the chart when Heikin-Ashi data changes
   useEffect(() => {
-    if (historicalData.length > 0 && chartContainerRef.current) {
-      // If the chart doesn't exist, create it
+    if (heikinAshiData.length > 0 && chartContainerRef.current) {
       if (!chartRef.current) {
         chartRef.current = createChart(chartContainerRef.current, {
           width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
+          height: 400,
+          layout: {
+            background: { color: '#ffffff' },
+            textColor: '#333',
+          },
+          grid: {
+            vertLines: { color: '#f0f0f0' },
+            horzLines: { color: '#f0f0f0' },
+          },
         });
-      } else {
-        // Update the chart dimensions if the container size changes
-        chartRef.current.resize(chartContainerRef.current.clientWidth, chartContainerRef.current.clientHeight);
       }
 
-      // Add the area series to the chart
-      const areaSeries = chartRef.current.addAreaSeries();
-      // Set the data for the area series
-      areaSeries.setData(historicalData);
-
-      // Add the Heikin-Ashi series to the chart
       if (!heikinAshiSeriesRef.current) {
-        heikinAshiSeriesRef.current = chartRef.current.addCandlestickSeries();
+        heikinAshiSeriesRef.current = chartRef.current.addCandlestickSeries({
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderVisible: false,
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+        });
       }
-      // Set the data for the Heikin-Ashi series
-      heikinAshiSeriesRef.current.setData(heikinAshiData);
-    }
-  }, [historicalData, heikinAshiData]);
 
-  // Handle 'Enter' key press in the input field
-  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      fetchStockData();
+      heikinAshiSeriesRef.current.setData(heikinAshiData);
+
+      chartRef.current.timeScale().fitContent();
     }
-  };
+  }, [heikinAshiData]);
 
   // Format the key names for display
   const formatKey = (key: string): string => {
@@ -367,7 +362,7 @@ const StockQuote: React.FC = () => {
       )}
       {/* Display the chart */}
       <div className="mt-6 p-4 bg-gray-100 rounded-lg shadow-inner">
-        <div ref={chartContainerRef} className="w-full h-64"></div>
+        <div ref={chartContainerRef} className="w-full h-[400px]"></div>
       </div>
     </div>
   );
