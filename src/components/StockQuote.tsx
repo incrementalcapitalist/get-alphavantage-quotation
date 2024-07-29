@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi } from "lightweight-charts";
+import { createChart, IChartApi, ColorType } from "lightweight-charts";
 
 // Add type declarations for URL and URLSearchParams
 declare global {
@@ -236,7 +236,7 @@ const StockQuote: React.FC = () => {
         width: chartContainerRef.current.clientWidth,
         height: 400,
         layout: {
-          background: { type: 'solid', color: '#ffffff' },
+          background: { type: ColorType.Solid, color: '#ffffff' },
           textColor: '#333',
         },
         grid: {
