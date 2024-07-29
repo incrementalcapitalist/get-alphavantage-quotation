@@ -1,5 +1,5 @@
-// Import React and useState hook from the React library
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { createChart } from "lightweight-charts";
 
 // Define types for the API response and errors
 type APIError = {
@@ -20,6 +20,11 @@ const StockQuote: React.FC = () => {
   const [error, setError] = useState<APIError | null>(null);
   // State for loading status
   const [loading, setLoading] = useState<boolean>(false);
+  // State for historical data
+  const [historicalData, setHistoricalData] = useState<any[]>([]);
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<any>(null);
 
   // Function to fetch stock data from the API
   const fetchStockData = async () => {
@@ -64,6 +69,9 @@ const StockQuote: React.FC = () => {
 
       // Set the stock data state with the received quote
       setStockData(quote);
+
+      // Fetch historical data for the symbol
+      await fetchHistoricalData(symbol);
     } catch (err) {
       // Handle different types of errors
       if (err instanceof Error) {
@@ -78,6 +86,55 @@ const StockQuote: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const fetchHistoricalData = async (symbol: string) => {
+    try {
+      const apiUrl = new URL("https://www.alphavantage.co/query");
+      apiUrl.searchParams.append("function", "TIME_SERIES_DAILY_ADJUSTED");
+      apiUrl.searchParams.append("symbol", symbol);
+      apiUrl.searchParams.append("apikey", import.meta.env.VITE_ALPHA_VANTAGE_API_KEY);
+
+      const response = await fetch(apiUrl.toString());
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data["Error Message"]) {
+        throw new Error(data["Error Message"]);
+      }
+
+      const timeSeries = data["Time Series (Daily)"];
+      const chartData = Object.keys(timeSeries).map((date) => {
+        const dayData = timeSeries[date];
+        return {
+          time: date,
+          value: parseFloat(dayData["4. close"]),
+        };
+      });
+
+      setHistoricalData(chartData);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError({ message: err.message });
+      } else if (typeof err === "string") {
+        setError({ message: err });
+      } else {
+        setError({ message: "An unknown error occurred" });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (historicalData.length > 0 && chartContainerRef.current) {
+      if (!chartRef.current) {
+        chartRef.current = createChart(chartContainerRef.current, { width: 600, height: 300 });
+      }
+
+      const areaSeries = chartRef.current.addAreaSeries();
+      areaSeries.setData(historicalData);
+    }
+  }, [historicalData]);
 
   // Handle 'Enter' key press in the input field
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -152,6 +209,8 @@ const StockQuote: React.FC = () => {
           </table>
         </div>
       )}
+      {/* Display the chart */}
+      <div ref={chartContainerRef} className="mt-6"></div>
     </div>
   );
 };
