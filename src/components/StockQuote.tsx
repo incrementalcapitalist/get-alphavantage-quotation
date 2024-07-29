@@ -227,14 +227,56 @@ const StockQuote: React.FC = () => {
   useEffect(() => {
     if (historicalData.length > 0 && chartContainerRef.current) {
       // If the chart doesn't exist, create it
-      if (!chartRef.current) {
-        chartRef.current = createChart(chartContainerRef.current, { width: 600, height: 300 });
+      if (chartRef.current) {
+        chartRef.current.remove();
       }
-
+      
       // Add the area series to the chart
-      const areaSeries = chartRef.current.addAreaSeries();
-      // Set the data for the area series
+      const chart = createChart(chartContainerRef.current, {
+        width: chartContainerRef.current.clientWidth,
+        height: 400,
+        layout: {
+          background: { type: 'solid', color: '#ffffff' },
+          textColor: '#333',
+        },
+        grid: {
+          vertLines: { color: '#f0f0f0' },
+          horzLines: { color: '#f0f0f0' },
+        },
+        crosshair: {
+          mode: 1,
+        },
+        rightPriceScale: {
+          borderColor: '#f0f0f0',
+        },
+        timeScale: {
+          borderColor: '#f0f0f0',
+        },
+      });
+
+      const areaSeries = chart.addAreaSeries({
+        topColor: 'rgba(33, 150, 243, 0.56)',
+        bottomColor: 'rgba(33, 150, 243, 0.04)',
+        lineColor: 'rgba(33, 150, 243, 1)',
+        lineWidth: 2,
+      });
+      
       areaSeries.setData(historicalData);
+
+      chart.timeScale().fitContent();
+
+      chartRef.current = chart;
+
+      const handleResize = () => {
+        chart.applyOptions({ width: chartContainerRef.current!.clientWidth });
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        chart.remove();
+      };
     }
   }, [historicalData]);
 
@@ -252,30 +294,34 @@ const StockQuote: React.FC = () => {
 
   // Render the component
   return (
-    <div className="bg-white shadow-md rounded-lg p-6">
-      <h2 className="text-2xl font-bold mb-4 text-gray-800">
+    <div className="bg-white shadow-lg rounded-lg p-6 max-w-6xl mx-auto">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">
         Stock Quote Fetcher
       </h2>
-      <div className="mb-4">
-        <input
-          type="text"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-          onKeyPress={handleKeyPress}
-          placeholder="Enter stock symbol (e.g., AAPL)"
-          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          aria-label="Stock Symbol"
-        />
+      <div className="flex flex-col md:flex-row mb-6">
+        <div className="w-full md:w-1/3 mb-4 md:mb-0 md:mr-4">
+          <input
+            type="text"
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+            onKeyPress={handleKeyPress}
+            placeholder="Enter stock symbol (e.g., AAPL)"
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            aria-label="Stock Symbol"
+          />
+        </div>
+        <div className="w-full md:w-1/3">
+          <button
+            onClick={fetchStockData}
+            disabled={loading}
+            className="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200 ease-in-out disabled:opacity-50"
+            aria-busy={loading}
+          >
+            {loading ? "Loading..." : "Fetch Quote"}
+          </button>
+        </div>
       </div>
-      <button
-        onClick={fetchStockData}
-        disabled={loading}
-        className="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200 ease-in-out disabled:opacity-50"
-        aria-busy={loading}
-      >
-        {loading ? "Loading..." : "Fetch Quote"}
-      </button>
-      {/* Display error message if there is an error */}
+      
       {error && (
         <p className="mt-4 text-red-500" role="alert">
           Error: {error.message}
@@ -283,37 +329,34 @@ const StockQuote: React.FC = () => {
       )}
       {/* Display stock data if it exists */}
       {stockData && (
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Field
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Value
-                </th>
-              </tr>
-            </thead>
-            {/* Table body */}
-            <tbody className="bg-white divide-y divide-gray-200">
-              {/* Map over stockData entries to create table rows */}
-              {Object.entries(stockData).map(([key, value]) => (
-                <tr key={key}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {formatKey(key)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {value}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-col lg:flex-row">
+          <div className="w-full lg:w-1/2 mb-6 lg:mb-0 lg:mr-6">
+            <h3 className="text-xl font-semibold mb-4">Stock Information</h3>
+            <div className="bg-gray-50 rounded-lg p-4 overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Field</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {Object.entries(stockData).map(([key, value]) => (
+                    <tr key={key}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatKey(key)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="w-full lg:w-1/2">
+            <h3 className="text-xl font-semibold mb-4">Historical Chart</h3>
+            <div ref={chartContainerRef} className="w-full h-96 bg-white rounded-lg shadow-inner" />
+          </div>
         </div>
       )}
-      {/* Display the chart */}
-      <div ref={chartContainerRef} className="mt-6"></div>
     </div>
   );
 };
