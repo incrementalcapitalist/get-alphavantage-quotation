@@ -209,10 +209,19 @@ const StockQuote: React.FC = () => {
         }
       }
 
+      // Transform the data into the format expected by the chart
+      const chartData: ChartDataPoint[] = Object.entries(timeSeries)
+        .map(([date, values]): ChartDataPoint => ({
+          time: date,
+          value: parseFloat(values['4. close']),
+        }))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
       // Calculate Heikin-Ashi data
       const heikinAshiData: HeikinAshiDataPoint[] = calculateHeikinAshi(timeSeries);
 
-      // Update the state with the processed Heikin-Ashi data
+      // Update the state with the processed historical data
+      setHistoricalData(chartData);
       setHeikinAshiData(heikinAshiData);
     } catch (error) {
       // Handle and rethrow errors
@@ -293,6 +302,12 @@ const StockQuote: React.FC = () => {
           grid: {
             vertLines: { visible: false },
             horzLines: { visible: false },
+          },
+          timeScale: {
+            visible: false,
+          },
+          priceScale: {
+            visible: false,
           },
         });
       }
