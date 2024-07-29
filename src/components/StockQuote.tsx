@@ -139,23 +139,23 @@ const StockQuote: React.FC = () => {
 
   // Function to fetch historical data
   const fetchHistoricalData = async (symbol: string): Promise<void> => {
-    // Construct the API URL
-    const apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
-      function: 'TIME_SERIES_DAILY_ADJUSTED',
-      symbol,
-      apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
-    });
-
     try {
+      // Construct the API URL for TIME_SERIES_DAILY_ADJUSTED
+      let apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
+        function: 'TIME_SERIES_DAILY_ADJUSTED',
+        symbol,
+        apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
+      });
+
       // Fetch data from the API
-      const response = await fetch(apiUrl);
+      let response = await fetch(apiUrl);
       // Check for HTTP errors
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       // Parse the JSON response
-      const data: AlphaVantageResponse = await response.json();
+      let data: AlphaVantageResponse = await response.json();
 
       // Log the response for debugging
       console.log("Historical Data Response:", data);
@@ -166,9 +166,31 @@ const StockQuote: React.FC = () => {
       }
 
       // Extract the time series data
-      const timeSeries = data['Time Series (Daily)'];
+      let timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
-        throw new Error('No time series data found');
+        // If no data found, try another endpoint
+        apiUrl = constructApiUrl('https://www.alphavantage.co/query', {
+          function: 'TIME_SERIES_DAILY',
+          symbol,
+          apikey: import.meta.env.VITE_ALPHA_VANTAGE_API_KEY,
+        });
+
+        response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        data = await response.json();
+        console.log("Historical Data Response (Alternative Endpoint):", data);
+
+        if ('Error Message' in data) {
+          throw new Error(data['Error Message'] as string);
+        }
+
+        timeSeries = data['Time Series (Daily)'];
+        if (!timeSeries) {
+          throw new Error('No time series data found');
+        }
       }
 
       // Transform the data into the format expected by the chart
